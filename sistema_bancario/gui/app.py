@@ -1,12 +1,14 @@
 import tkinter as tk
 from tkinter import ttk
 
+from sistema_bancario.auth.service import AuthService
 from sistema_bancario.services.banco import Banco
 
 
 class BankApp:
     def __init__(self):
         self.banco = Banco()
+        self.auth = AuthService()
         self.root = tk.Tk()
         self.root.title("Sistema Bancario")
         self.root.geometry("1200x760")
@@ -14,10 +16,11 @@ class BankApp:
         self.root.configure(bg="#f4efe7")
 
         self.status_var = tk.StringVar(value="Sistema pronto para uso.")
+        self.login_user_var = tk.StringVar(value="consultor")
+        self.login_password_var = tk.StringVar()
 
         self._configure_styles()
-        self._build_layout()
-        self._refresh_all()
+        self._build_login()
 
     def _configure_styles(self):
         style = ttk.Style()
@@ -78,6 +81,7 @@ class BankApp:
         )
 
     def _build_layout(self):
+        self._clear_root()
         wrapper = ttk.Frame(self.root, style="App.TFrame", padding=24)
         wrapper.pack(fill="both", expand=True)
 
@@ -89,7 +93,7 @@ class BankApp:
         )
         ttk.Label(
             header,
-            text="Cadastre clientes, abra contas e acompanhe movimentacoes em uma unica interface.",
+            text=f"Painel interno autenticado como {self.auth.session.username}.",
             style="Subtitle.TLabel",
         ).pack(anchor="w", pady=(4, 18))
 
@@ -113,11 +117,56 @@ class BankApp:
 
         status_bar = ttk.Frame(wrapper, style="Card.TFrame", padding=(16, 12))
         status_bar.pack(fill="x", pady=(18, 0))
-        ttk.Label(
+        ttk.Label(status_bar, textvariable=self.status_var, style="CardText.TLabel").pack(
+            side="left", anchor="w"
+        )
+        ttk.Button(
             status_bar,
-            textvariable=self.status_var,
+            text="Sair",
+            style="Accent.TButton",
+            command=self._handle_logout,
+        ).pack(side="right")
+
+        self._refresh_all()
+
+    def _build_login(self):
+        self._clear_root()
+
+        wrapper = ttk.Frame(self.root, style="App.TFrame", padding=24)
+        wrapper.pack(fill="both", expand=True)
+        wrapper.columnconfigure(0, weight=1)
+        wrapper.rowconfigure(0, weight=1)
+
+        card = ttk.Frame(wrapper, style="Card.TFrame", padding=28)
+        card.grid(row=0, column=0)
+
+        ttk.Label(card, text="Acesso Administrativo", style="Title.TLabel").pack(
+            anchor="w"
+        )
+        ttk.Label(
+            card,
+            text="Entre com uma conta interna para acessar o painel operacional.",
+            style="Subtitle.TLabel",
+        ).pack(anchor="w", pady=(4, 18))
+
+        self._create_labeled_entry(card, "Usuario", self.login_user_var)
+        self._create_labeled_entry(card, "Senha", self.login_password_var, show="*")
+
+        ttk.Label(
+            card,
+            text="Credenciais demo: consultor / 1234",
             style="CardText.TLabel",
-        ).pack(anchor="w")
+        ).pack(anchor="w", pady=(0, 10))
+        ttk.Label(card, textvariable=self.status_var, style="CardText.TLabel").pack(
+            anchor="w", pady=(0, 10)
+        )
+
+        ttk.Button(
+            card,
+            text="Entrar",
+            style="Accent.TButton",
+            command=self._handle_login,
+        ).pack(anchor="e")
 
     def _create_metric_card(self, parent, title, value, column):
         card = ttk.Frame(parent, style="Card.TFrame", padding=18)
@@ -294,11 +343,26 @@ class BankApp:
             self.tree_contas.column(coluna, width=largura, anchor="w")
         self.tree_contas.pack(fill="both", expand=True)
 
-    def _create_labeled_entry(self, parent, label, variable):
+    def _create_labeled_entry(self, parent, label, variable, show=None):
         field = ttk.Frame(parent, style="Card.TFrame")
         field.pack(fill="x", pady=(0, 10))
         ttk.Label(field, text=label, style="CardText.TLabel").pack(anchor="w")
-        ttk.Entry(field, textvariable=variable).pack(fill="x", pady=(4, 0))
+        ttk.Entry(field, textvariable=variable, show=show).pack(fill="x", pady=(4, 0))
+
+    def _handle_login(self):
+        sucesso, mensagem, _ = self.auth.login(
+            self.login_user_var.get().strip(),
+            self.login_password_var.get(),
+        )
+        self._set_status(mensagem)
+        if sucesso:
+            self.login_password_var.set("")
+            self._build_layout()
+
+    def _handle_logout(self):
+        self.auth.logout()
+        self.status_var.set("Sessao encerrada com seguranca.")
+        self._build_login()
 
     def _handle_criar_cliente(self):
         if not all(
@@ -417,7 +481,7 @@ class BankApp:
             self.tree_clientes.insert(
                 "",
                 "end",
-                values=(cliente.cpf, cliente.nome, cliente.data_nascimento),
+                values=(self._mask_cpf(cliente.cpf), cliente.nome, cliente.data_nascimento),
             )
 
         for item in self.tree_contas.get_children():
@@ -431,6 +495,15 @@ class BankApp:
 
     def _set_status(self, message):
         self.status_var.set(message)
+
+    def _mask_cpf(self, cpf):
+        if len(cpf) < 4:
+            return cpf
+        return f"{'*' * max(len(cpf) - 4, 0)}{cpf[-4:]}"
+
+    def _clear_root(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
     def run(self):
         self.root.mainloop()

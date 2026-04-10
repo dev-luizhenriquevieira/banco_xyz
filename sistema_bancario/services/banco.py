@@ -2,6 +2,7 @@ import io
 from contextlib import redirect_stdout
 
 from sistema_bancario.models import ContaCorrente, Deposito, PessoaFisica, Saque
+from sistema_bancario.services.result import OperationResult
 
 
 class Banco:
@@ -16,6 +17,12 @@ class Banco:
     @property
     def contas(self):
         return self._contas
+
+    def listar_clientes(self):
+        return list(self._clientes)
+
+    def listar_contas(self):
+        return list(self._contas)
 
     def buscar_cliente_por_cpf(self, cpf):
         for cliente in self._clientes:
@@ -52,6 +59,12 @@ class Banco:
         self._contas.append(conta)
         cliente.adicionar_conta(conta)
         return True, f"Conta {numero_conta} criada com sucesso."
+
+    def contas_do_cliente(self, cpf):
+        cliente = self.buscar_cliente_por_cpf(cpf)
+        if not cliente:
+            return OperationResult(False, "Cliente nao encontrado.")
+        return OperationResult(True, "Contas carregadas com sucesso.", list(cliente.contas))
 
     def depositar(self, numero_conta, valor):
         conta = self.buscar_conta(numero_conta)
